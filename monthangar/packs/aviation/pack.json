@@ -1,0 +1,15 @@
+{
+ "name": "aviation",
+ "title": "Aviation",
+ "subject_kind": "aircraft",
+ "units": "imperial",
+ "shot_types": ["hangar", "studio", "flight", "compare", "map", "board", "archival", "card"],
+ "needs_subject": ["hangar", "studio", "flight"],
+ "rhythm": {"hangar": 0.28, "flight": 0.2, "map": 0.12, "board": 0.1, "archival": 0.13, "studio": 0.06, "card": 0.06, "compare": 0.05},
+ "shot_seconds": {"min": 1.4, "target": 4.2, "max": {"default": 9, "archival": 12, "map": 11, "board": 12}},
+ "vertical": {"long_subject_m": 12, "side_az": [55, 125], "min_dist": 1.25},
+ "engines": {"piston": "radial or inline piston engines with propellers", "turboprop": "turbine engines with propellers", "jet": "turbojet or turbofan", "rotor": "helicopter rotors"},
+ "subject_fields": ["name", "length_m", "span_m", "height_m", "engine", "engines", "gear", "spin", "anchors", "parts", "facts", "licence", "credit", "source"],
+ "sky": ["day", "golden", "dusk", "high", "overcast"],
+ "below": ["ocean", "clouds", "land", "desert", "snow"]
+}

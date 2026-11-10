@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# MontHangar command line. Runs mh.py with the studio's Python (faster-whisper, numpy, scipy, pillow).
+# Usage: mh <command> [args]   (mh help for the list)
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+STUDIO="${MONTHANGAR_HOME:-}"
+if [ -z "$STUDIO" ]; then
+  STUDIO="$HOME/MontHangarStudio"
+fi
+PY="$STUDIO/.venv/bin/python"; [ -x "$PY" ] || PY="$STUDIO/.venv/Scripts/python.exe"; [ -x "$PY" ] || PY="python3"
+export MONTHANGAR_HOME="$STUDIO"
+exec "$PY" "$HERE/mh.py" "$@"
