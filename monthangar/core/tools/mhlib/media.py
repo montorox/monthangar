@@ -5,7 +5,7 @@ from pathlib import Path
 import requests
 from .common import load, save, cache
 
-UA = {'User-Agent': 'MontHangar/1.0 (documentary media fetcher; contact via project page)'}
+UA = {'User-Agent': 'MontHangar/1.0 (https://github.com/montorox/monthangar; documentary media fetcher)'}
 GAP = cache('net') / 'wikimedia-last'
 
 def _wait(min_s=20, max_s=60):
@@ -29,8 +29,10 @@ def credit(P, entry):
 def wikimedia(P, title, as_name=None, max_px=2600, kind='photo'):
     if title.startswith('http'): title = urllib.parse.unquote(title.split('/wiki/')[-1])
     if not title.startswith('File:'): title = 'File:' + title
-    q = requests.get('https://commons.wikimedia.org/w/api.php', params={'action': 'query', 'titles': title, 'prop': 'imageinfo', 'iiprop': 'url|extmetadata|size|mime', 'format': 'json'}, headers=UA, timeout=30).json()
-    page = next(iter(q['query']['pages'].values()))
+    api = lambda w: requests.get('https://commons.wikimedia.org/w/api.php', params={'action': 'query', 'titles': title, 'prop': 'imageinfo', 'iiprop': 'url|extmetadata|size|mime', 'iiurlwidth': w, 'format': 'json'}, headers=UA, timeout=30).json()
+    q = api(max_px); page = next(iter(q['query']['pages'].values()))
+    if 'imageinfo' in page and 0 < page['imageinfo'][0].get('width', 0) <= max_px and not page['imageinfo'][0].get('mime', '').startswith('video'):
+        q = api(page['imageinfo'][0]['width'] - 1); page = next(iter(q['query']['pages'].values()))   # a scaled copy one pixel under: served from the thumbnail cache, rarely throttled
     if 'imageinfo' not in page: sys.exit(f'not found on Commons: {title}')
     ii = page['imageinfo'][0]; md = ii.get('extmetadata', {}); g = lambda k: _clean(md.get(k, {}).get('value', ''))
     lic = g('LicenseShortName') or g('UsageTerms'); author = g('Artist') or g('Credit')
@@ -40,9 +42,11 @@ def wikimedia(P, title, as_name=None, max_px=2600, kind='photo'):
     out = Path(P) / 'media' / sub / ((as_name or re.sub(r'[^A-Za-z0-9_-]+', '_', title[5:].rsplit('.', 1)[0])[:60]) + ext)
     out.parent.mkdir(parents=True, exist_ok=True)
     _wait()
-    for attempt in range(4):
-        r = requests.get(ii['url'], headers=UA, timeout=180, stream=True)
-        if r.status_code == 429: w = 60 * (attempt + 1); print(f'429 from Wikimedia, waiting {w} s'); time.sleep(w); continue
+    # the scaled copy (cached, far less throttled than originals) when the original is bigger than we need; the original as fallback
+    urls = [u for u in (ii.get('thumburl') if sub == 'photos' else None, ii['url']) if u]
+    for attempt in range(5):
+        r = requests.get(urls[min(attempt // 2, len(urls) - 1)] if len(urls) > 1 else urls[0], headers=UA, timeout=180, stream=True)
+        if r.status_code in (429, 403, 503): w = 30 * (attempt + 1); print(f'429 from Wikimedia, waiting {w} s'); time.sleep(w); continue
         r.raise_for_status(); out.write_bytes(r.content); break
     else: sys.exit('Wikimedia kept refusing; try again later')
     if sub == 'photos' and ext in ('.jpg', '.jpeg', '.png', '.tif', '.tiff', '.webp'):

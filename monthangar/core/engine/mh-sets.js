@@ -139,7 +139,7 @@ function bayLights(scene, L, theme, S) {
   scene.add(key);
   const rim = new THREE.DirectionalLight(new THREE.Color(theme.rimColor), theme.name === 'graphite' ? 0.9 : 0.5); rim.position.set(-L * 0.4, L * 0.6, -L * 1.5); scene.add(rim);
   /* two ceiling spots make pools of warm light on the floor around the aircraft */
-  for (const [x, z] of [[L * 0.35, L * 0.45], [-L * 0.45, -L * 0.35]]) { const sp = new THREE.SpotLight(new THREE.Color(theme.lampColor), (theme.name === 'graphite' ? 1700 : 600) * (L / 20) ** 1.6 * theme.lampPower, L * 3, rad(38), 0.85, 1.6); sp.position.set(x, Math.max(12, L * 0.62) - 3, z); sp.target.position.set(x * 0.6, 0, z * 0.6); scene.add(sp); scene.add(sp.target); }
+  for (const [x, z] of [[L * 0.35, L * 0.45], [-L * 0.45, -L * 0.35]]) { const sp = new THREE.SpotLight(new THREE.Color(theme.lampColor), (theme.name === 'graphite' ? 1700 : 600) * (L / 20) ** 1.6 * theme.lampPower * (S?.meta?.lamp ?? 1), L * 3, rad(38), 0.85, 1.6); sp.position.set(x, Math.max(12, L * 0.62) - 3, z); sp.target.position.set(x * 0.6, 0, z * 0.6); scene.add(sp); scene.add(sp.target); }
   scene.environment = env(theme); scene.environmentIntensity = theme.name === 'graphite' ? 0.38 : 0.7;
 }
 
@@ -161,12 +161,12 @@ export function buildStage(L, theme, opt = {}) {
   const under = new THREE.Mesh(new THREE.CircleGeometry(L * 2.2, 64), new THREE.MeshBasicMaterial({ color: '#000', transparent: true, opacity: 0.85, alphaMap: fade })); under.rotation.x = -Math.PI / 2; under.position.y = -L * 0.6; g.add(under);
   return g;
 }
-function stageLights(scene, L, theme, opt = {}) {
-  const st = theme.stage;
+function stageLights(scene, L, theme, opt = {}, S = null) {
+  const st = theme.stage; const rk = opt.rimGlow ?? S?.meta?.stage_rim ?? 1;   /* subject.json "stage_rim": 0.35 keeps white paint white */
   scene.add(new THREE.HemisphereLight('#9fb3c8', '#050607', 0.25));
   const key = new THREE.SpotLight('#fff3e2', 1200 * (L / 20) ** 1.4, L * 6, rad(34), 0.6, 1.4);   /* power scales with the falloff, so a big set (compare, a B-52) is lit like a small one */ key.position.set(L * 0.2, L * 1.6, L * 1.9); key.castShadow = true; key.shadow.mapSize.set(2048, 2048); key.shadow.bias = -0.0003; scene.add(key); scene.add(key.target);
-  const a = new THREE.DirectionalLight(new THREE.Color(opt.glowA || st.glowA), 2.4); a.position.set(L * 1.4, L * 0.5, -L * 1.2); scene.add(a);
-  const b = new THREE.DirectionalLight(new THREE.Color(opt.glowB || st.glowB), 2.4); b.position.set(-L * 1.4, L * 0.5, -L * 1.2); scene.add(b);
+  const a = new THREE.DirectionalLight(new THREE.Color(opt.glowA || st.glowA), 2.4 * rk); a.position.set(L * 1.4, L * 0.5, -L * 1.2); scene.add(a);
+  const b = new THREE.DirectionalLight(new THREE.Color(opt.glowB || st.glowB), 2.4 * rk); b.position.set(-L * 1.4, L * 0.5, -L * 1.2); scene.add(b);
   const top = new THREE.DirectionalLight('#ffffff', 0.8); top.position.set(0, L * 2, 0); scene.add(top);
   scene.environment = env(theme); scene.environmentIntensity = 0.45;
 }
@@ -225,11 +225,14 @@ async function modelScene(shot, set) {
   const scene = new THREE.Scene(); const camera = new THREE.PerspectiveCamera(34, R.W / R.H, 0.1, 5000);
   const inst = instance(S, { gear: shot.gear, spin: shot.spin, rim: shot.rim });
   if (shot.silhouette) { scene.background = new THREE.Color('#000'); const white = new THREE.MeshBasicMaterial({ color: '#fff' }); inst.obj.traverse(o => { if (o.isMesh) o.material = white; }); scene.add(inst.obj); const st0 = { scene, camera, S, inst, outline: [], extras: [], bloom: 0, silhouette: true }; st0.project = projector(inst, camera); return st0; }
-  let stage = null; if (set === 'stage') { stage = buildStage(L, theme, shot); scene.add(stage); stageLights(scene, L, theme, shot); scene.background = new THREE.Color('#000'); }
+  let stage = null; if (set === 'stage') { stage = buildStage(L, theme, shot); scene.add(stage); stageLights(scene, L, theme, shot, S); scene.background = new THREE.Color('#000'); }
   else { scene.add(buildBay(L, theme)); bayLights(scene, L, theme, S); scene.background = new THREE.Color(theme.bg); scene.fog = new THREE.Fog(theme.bg, L * 4, L * 9); }
   scene.add(inst.obj);
   if (shot.reflect !== false) scene.add(reflection(inst, theme));
   const st = { scene, camera, S, inst, outline: [], extras: [], stage };
+  /* a soft white fill that rides with the camera: rear views of light paint otherwise get only the coloured rim glow (subject.json "stage_fill") */
+  const fillK = shot.fill ?? (set === 'stage' ? S.meta?.stage_fill : S.meta?.bay_fill) ?? 0;
+  if (fillK > 0) { const hl = new THREE.DirectionalLight('#fff4e6', fillK); scene.add(hl); scene.add(hl.target); st.headlight = hl; }
   /* x-ray keeps the named parts solid and glowing */
   if (shot.xray) { const keep = xray(inst, [].concat(shot.xray)); st.xrayKeep = keep; st.outline = keep; }
   if (shot.highlight) { st.hi = parts(inst, [].concat(shot.highlight)); if (!st.hi.length) warn(`shot ${shot.id}: highlight part ${JSON.stringify(shot.highlight)} not found`); st.outline = st.hi; }
@@ -242,11 +245,12 @@ function drawModel(st, lt, u, shot) {
   if (!st.inst) return;
   animate(st.inst, lt, { spin: shot.spin });
   rig(shot, st.S, st.inst, st.camera, u, lt);
+  if (st.headlight) { st.headlight.position.copy(st.camera.position).add(new THREE.Vector3(0, st.S.dims.length * 0.3, 0)); st.headlight.target.position.set(0, st.S.dims.height * 0.4, 0); }
   faceStage(st.stage, st.camera);
-  if (st.hi) highlight(st.hi, 0.6 + 0.4 * Math.sin(lt * 3), shot.color);
+  if (st.hi) highlight(st.hi, 0.6 + 0.4 * Math.sin(lt * 3), shot.color, st.S?.meta?.highlight ?? 1);
   if (st.edgeAll) { st.outlineColor = R.theme.rimColor; st.outlineStrength = 2.2; }
   else if (st.outline.length) { st.outlineColor = shot.color || R.theme.glow; st.outlineStrength = 4; }
-  st.exposure = R.theme.exposure; st.bloomThreshold = 2.4;
+  st.exposure = shot.exposure ?? R.theme.exposure * (st.S?.meta?.exposure ?? 1); st.bloomThreshold = 2.4;   /* subject.json "exposure": 0.8 for white paint */
 }
 register('hangar', { kind: '3d', setup: s => modelScene(s, 'bay'), draw: (st, lt, u, cx) => drawModel(st, lt, u, cx.shot) });
 register('studio', { kind: '3d', setup: s => modelScene(s, 'stage'), draw: (st, lt, u, cx) => { drawModel(st, lt, u, cx.shot); st.bloom = st.silhouette ? 0 : 0.25; if (st.silhouette) { st.exposure = 1; st.outline = []; } } });

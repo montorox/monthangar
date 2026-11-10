@@ -59,6 +59,11 @@ Each aircraft is checked once and reused by every project. Never use a model str
 2. `mh library add <model.glb|scene.gltf> --id f4u --name "Vought F4U Corsair" --length 10.2 --span 12.5 --height 4.5 --engine piston --engines 1 --author NAME --source URL --licence "CC BY 4.0"`
    The doctor finds the heading (nose +Z, up +Y, wheels on the floor), scales to the real length, grades detail (A-D), checks span and height against the real figures, and renders `library/aviation/<id>/check/sheet.jpg`.
 3. **Look at the sheet**: front, right side (nose right), top (nose up), on its wheels, flight from below, flight front quarter. Wrong heading: add again with `--rotate x,y,z` (degrees).
+   A span or height warning usually means a yawed mesh, not a bad model: find the yaw from the engine or wing-tip positions and use `--rotate 0,<deg>,0`.
+   **Fix-ups in `subject.json`** (then verify again):
+   - Gear-up model: add with `--no-gear`, then `"add_gear": {"lift": 0.4, "legs": [{"x": 4, "z": 2, "wheel": 1.3}, {"x": -4, "z": 2, "wheel": 1.3}, {"x": 0, "z": 12, "wheel": 0.85}]}` builds struts and twin wheels (metres, nose +Z, port +X; hidden in flight).
+   - White or shiny paint: `exposure` (hangar, e.g. 0.88), `lamp` (bay spot, e.g. 0.35), `highlight` (glow strength on highlighted parts), `stage_rim` (studio rim glow), `stage_fill` / `bay_fill` (a white light that follows the camera, e.g. 1.6, so studio glow doesn't tint the paint).
+   - `"parts": {"fins": "^(LineF30|rul_napr)"}`: short names (regex on node names) usable anywhere a shot names a part.
 4. `mh library verify <id>`. Unverified or changed models are refused by `mh build`.
 
 Grade C models suit distant flight and backgrounds only; plan close-ups around grade A/B. One subject per film is normal; rivals for comparisons go in the library the same way.

@@ -35,7 +35,8 @@ function normalise(scene, meta, id) {
   const c = b2.getCenter(new THREE.Vector3());
   pivot.position.set(-c.x, -b2.min.y, -c.z);
   root.updateMatrixWorld(true);
-  const box3 = new THREE.Box3().setFromObject(scene), dims = box3.getSize(new THREE.Vector3());
+  const added = meta.add_gear ? addGear(root, pivot, scene, meta.add_gear) : [];
+  const box3 = new THREE.Box3().setFromObject(root), dims = box3.getSize(new THREE.Vector3());
   /* materials: sharper textures, shadows, and a luminance estimate for dark paint */
   let lum = 0, n = 0;
   scene.traverse(o => {
@@ -44,13 +45,16 @@ function normalise(scene, meta, id) {
     o.geometry.userData.shared = true;
     (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => {
       m.userData.shared = true;
+      if (meta.rough_min !== undefined && m.roughness !== undefined) { m.roughness = Math.max(m.roughness, meta.rough_min); if (m.roughnessMap) { m.roughnessMap = null; m.needsUpdate = true; } }
+      if (meta.metal_max !== undefined && m.metalness !== undefined) { m.metalness = Math.min(m.metalness, meta.metal_max); if (m.metalnessMap) { m.metalnessMap = null; m.needsUpdate = true; } }
       for (const key of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'aoMap']) if (m[key]) { m[key].anisotropy = 8; m[key].userData.shared = true; }
       if (m.color) { const cc = m.color; const l = 0.2126 * cc.r + 0.7152 * cc.g + 0.0722 * cc.b; lum += m.map ? Math.max(l * 0.6, 0.25) : l; n++; }
     });
   });
   const dark = n ? lum / n < 0.12 : false;
   const nodes = {}; scene.traverse(o => { if (o.name) nodes[o.name] = o; });
-  const gearNodes = (meta.gear || []).flatMap(g => findNodes(nodes, g));
+  added.forEach(g => { nodes[g.name] = g; });
+  const gearNodes = [...(meta.gear || []).flatMap(g => findNodes(nodes, g)), ...added];
   if ((meta.gear || []).length && !gearNodes.length) warn(`${id}: gear nodes ${JSON.stringify(meta.gear)} not found in the model; run the model doctor`);
   const spin = (meta.spin || []).map(s => ({ ...s, objs: findNodes(nodes, s.node) })).filter(s => s.objs.length);
   const skip = new Set([...gearNodes, ...spin.flatMap(x => x.objs)]); scene.updateMatrixWorld(true);
@@ -58,6 +62,46 @@ function normalise(scene, meta, id) {
   const S = { id, meta, root, dims: { length: dims.z, span: dims.x, height: dims.y }, box: box3, dark, nodes, gearNodes, spin, anchors,
     radius: Math.max(dims.x, dims.z) * 0.5, name: meta.name || id };
   return S;
+}
+/* Landing gear for a model built gear-up (many flight-only models have none): raise the aircraft by `lift` metres and stand it
+   on struts and twin wheels at the given stations. Each strut reaches up to the real underside, found by casting a ray down.
+   subject.json: "add_gear": {"lift": 0.42, "legs": [{"x": 4.05, "z": 2.0, "wheel": 1.3}, {"x": 0, "z": 12, "wheel": 0.85}]}
+   Legs are hidden in flight like real gear. Metres, in the normalised frame (nose +Z, port wing +X). */
+function addGear(root, pivot, scene, spec) {
+  const lift = spec.lift || 0; pivot.position.y += lift; root.updateMatrixWorld(true);
+  const rub = new THREE.MeshStandardMaterial({ color: 0x1b1b1d, roughness: 0.92, metalness: 0 });
+  const hub = new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.35, metalness: 0.85 });
+  const leg = new THREE.MeshStandardMaterial({ color: 0x6e747a, roughness: 0.42, metalness: 0.75 });
+  const chrome = new THREE.MeshStandardMaterial({ color: 0xd8dde2, roughness: 0.12, metalness: 1 });
+  [rub, hub, leg, chrome].forEach(m => { m.userData.shared = true; });
+  const ray = new THREE.Raycaster(); const meshes = []; scene.traverse(o => { if (o.isMesh) meshes.push(o); });
+  const bar = (r, a, b, m) => {  // a cylinder between two points
+    const d = new THREE.Vector3().subVectors(b, a); const g = new THREE.CylinderGeometry(r, r, d.length(), 18);
+    const o = new THREE.Mesh(g, m); o.position.copy(a).addScaledVector(d, 0.5);
+    o.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize()); return o;
+  };
+  return (spec.legs || []).map((L, i) => {
+    const D = L.wheel || 1.1, r = D / 2, w = L.tyre || D * 0.3, sr = L.strut || D * 0.1, gap = L.gap ?? D * 0.12;
+    ray.set(new THREE.Vector3(L.x, 50, L.z), new THREE.Vector3(0, -1, 0));
+    const hit = ray.intersectObjects(meshes, false).filter(h => h.point.y > r).pop();
+    const top = (hit ? hit.point.y : r + (L.len || 2)) + 0.15;
+    const G = new THREE.Group(); G.name = `mh_gear_${i}`;
+    const axle = r, oleo = axle + Math.min(1.1, (top - axle) * 0.45);
+    G.add(bar(sr, new THREE.Vector3(L.x, oleo - 0.05, L.z), new THREE.Vector3(L.x, top, L.z), leg));        // outer cylinder
+    G.add(bar(sr * 0.72, new THREE.Vector3(L.x, axle, L.z), new THREE.Vector3(L.x, oleo, L.z), chrome));    // oleo piston
+    G.add(bar(sr * 0.55, new THREE.Vector3(L.x, (top + oleo) / 2, L.z), new THREE.Vector3(L.x, top, L.z + (L.brace ?? -1.2) * D), leg)); // drag brace
+    G.add(bar(sr * 0.6, new THREE.Vector3(L.x - gap - w, axle, L.z), new THREE.Vector3(L.x + gap + w, axle, L.z), leg));   // axle
+    for (const s of [-1, 1]) {
+      const cx = L.x + s * (gap + w / 2);
+      const tyre = new THREE.Mesh(new THREE.CylinderGeometry(r, r, w, 40, 1), rub); tyre.rotation.z = Math.PI / 2; tyre.position.set(cx, axle, L.z);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(r * 0.94, r * 0.08, 10, 40), rub); ring.rotation.y = Math.PI / 2;
+      const rim = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.56, r * 0.56, w * 1.04, 32), hub); rim.rotation.z = Math.PI / 2; rim.position.set(cx, axle, L.z);
+      for (const e of [-1, 1]) { const rr = ring.clone(); rr.position.set(cx + e * w / 2, axle, L.z); G.add(rr); }
+      G.add(tyre, rim);
+    }
+    G.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; o.geometry.userData.shared = true; } });
+    root.add(G); return G;
+  });
 }
 function findNodes(nodes, pat) {
   if (nodes[pat]) return [nodes[pat]];
@@ -175,14 +219,16 @@ export function xray(inst, keep = [], amount = 1) {
   inst.obj.traverse(o => { if (o.isMesh && !keepSet.has(o)) { o.userData.solid = o.userData.solid || o.material; o.material = g; o.castShadow = false; } });
   inst.ghost = g; return keepObjs;
 }
-export function parts(inst, names = []) { return names.flatMap(k => findNodes(inst.nodes, k)); }
+/* part names: a node name, a regex, or an alias from subject.json "parts": {"fins": "LineF30|rul_napr"} */
+const alias = (inst, k) => ((inst.S.meta || {}).parts || {})[k] || k;
+export function parts(inst, names = []) { return names.flatMap(k => findNodes(inst.nodes, alias(inst, k))); }
 /* highlight: an emissive pulse on the named parts; the core adds an outline in the glow colour */
-export function highlight(objs, amount, color) {
+export function highlight(objs, amount, color, k = 1) {   /* k: subject.json "highlight" (0.35 for white paint, so the outline leads and the livery shows) */
   const col = new THREE.Color(color || R.theme.glow);
   for (const o of objs) o.traverse(x => {
     if (!x.isMesh) return;
     if (!x.userData.hiMat) { x.userData.hiMat = (Array.isArray(x.material) ? x.material[0] : x.material).clone(); x.material = x.userData.hiMat; }
-    if (x.material.emissive) { x.material.emissive.copy(col); x.material.emissiveIntensity = amount * 0.9; }
+    if (x.material.emissive) { x.material.emissive.copy(col); x.material.emissiveIntensity = amount * 0.9 * k; }
   });
 }
 /* a world point for an anchor name, a part name, or [x, y, z] metres */
@@ -190,14 +236,15 @@ export function point(inst, a) {
   if (Array.isArray(a)) return new THREE.Vector3(...a).applyMatrix4(inst.obj.matrixWorld);
   const an = inst.S.anchors[a];
   if (an) return new THREE.Vector3(...an).applyMatrix4(inst.obj.matrixWorld);
-  const objs = findNodes(inst.nodes, a);
+  const objs = findNodes(inst.nodes, alias(inst, a));
   if (objs.length) { const b = new THREE.Box3(); objs.forEach(o => b.expandByObject(o)); return b.getCenter(new THREE.Vector3()); }
   warn(`${inst.S.id}: no anchor or part "${a}" (anchors: ${Object.keys(inst.S.anchors).join(', ')})`);
   return new THREE.Vector3().setFromMatrixPosition(inst.obj.matrixWorld);
 }
 export function boxOf(inst, names) {
   const b = new THREE.Box3(); const objs = parts(inst, names);
-  if (!objs.length) { names.forEach(n => b.expandByPoint(point(inst, n))); b.expandByScalar(Math.max(1, (inst.S?.radius || 6) * 0.3)); }  // an anchor is a point: give it a sensible area round it, a third of the aircraft else objs.forEach(o => b.expandByObject(o));
+  if (!objs.length) { names.forEach(n => b.expandByPoint(point(inst, n))); b.expandByScalar(Math.max(1, (inst.S?.radius || 6) * 0.3)); }  // an anchor is a point: give it a sensible area round it
+  else objs.forEach(o => b.expandByObject(o));
   return b;
 }
 

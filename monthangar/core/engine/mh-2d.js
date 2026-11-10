@@ -164,7 +164,7 @@ register('board', {
     const c = cx.c, th = R.theme.board, s = R.scale, n = st.ev.length, dur = cx.shot.t1 - cx.shot.t0;
     gridBg(c, lt, { dur, brackets: false });
     const spacing = (R.vertical ? 0.62 : 0.34) * R.W; const total = Math.max(0, (n - 1) * spacing);
-    const appear = i => (st.ev[i].t ?? (0.25 + i * Math.max(0.6, (dur - 1.2) / Math.max(1, n)))); /* seconds into the shot */
+    const appear = i => (typeof st.ev[i].t === 'number' ? st.ev[i].t : (0.25 + i * Math.max(0.6, (dur - 1.2) / Math.max(1, n)))); /* seconds into the shot */
     let active = 0; for (let i = 0; i < n; i++) if (lt >= appear(i)) active = i;
     const focusX = n > 1 ? lerp(active > 0 ? (active - 1) * spacing : 0, active * spacing, ease.inOut(clamp((lt - appear(active)) / 0.8))) : 0;
     const view = Math.min(total, focusX) - (R.vertical ? 0 : Math.min(total, spacing * 0.6)) * (n > 2 ? 0.5 : 0);
@@ -300,18 +300,34 @@ register('card', {
         if (!cols.length) { c.textAlign = 'right'; c.fillStyle = th.ink; c.fillText(String(r[1] ?? ''), x1 - 10 * s, y); }
         else { c.textAlign = 'center'; r.slice(1).forEach((v, j) => { c.fillStyle = j === (st.mark ?? -1) ? th.accent : th.ink; c.fillText(String(v), x0 + cw * (j + 1.5), y); }); } });
     } else if (style === 'fact') {
-      const k = ease.out(clamp(lt / 1.2)); const v = typeof st.value === 'number' ? st.value * k : st.value;
+      const k = ease.out(clamp(lt / 1.2)); const v = typeof st.value === 'number' ? (Number.isInteger(st.value) ? Math.round(st.value * k) : st.value * k) : st.value;
       const [p, q] = typeof st.value === 'number' ? units(v, st.unit, st) : [String(v), '']; const vy = R.H * 0.44;
       kicker(c, st.kicker || '', R.W / 2, vy - 170 * s, th.dim, a);
       c.globalAlpha = a; c.font = F(800, V ? 180 : 230); c.fillStyle = th.accent; glowText(c, p, R.W / 2, vy, th.accent, 50 * s);
       if (q) { c.font = F(600, 50); c.fillStyle = th.dim; c.fillText(units(st.value, st.unit, st)[1], R.W / 2, vy + 145 * s); }
       rule(c, R.W / 2, vy + (q ? 200 : 150) * s, 700 * s, th.accent, ease.out(clamp((lt - 0.5) / 0.8)));
       c.font = F(700, 52); c.fillStyle = th.ink; wrapText(c, String(st.caption || '').toUpperCase(), R.W * 0.78).forEach((l, i) => { c.globalAlpha = ease.out(clamp((lt - 0.6 - i * 0.12) / 0.5)); c.fillText(l, R.W / 2, vy + (q ? 262 : 212) * s + i * 62 * s); });
-    } else if (style === 'doc' && st.im) {
-      const im = st.im; const maxW = R.W * 0.6, maxH = R.H * 0.8; let w = maxW, h = w * im.height / im.width; if (h > maxH) { h = maxH; w = h * im.width / im.height; }
-      const z = lerp(1, 1.08, ease.sine(u)); c.save(); c.translate(R.W / 2, R.H / 2); c.rotate(-0.012); c.scale(z, z); c.shadowColor = 'rgba(0,0,0,0.65)'; c.shadowBlur = 50 * s; c.shadowOffsetY = 16 * s; c.drawImage(im, -w / 2, -h / 2, w, h); c.shadowColor = 'transparent';
-      if (st.mark) { const [mx, my, mw, mh] = st.mark; c.globalCompositeOperation = 'multiply'; c.fillStyle = th.accent; c.globalAlpha = 0.55 * ease.out(clamp((lt - 0.6) / 0.6)); c.fillRect(-w / 2 + mx * w, -h / 2 + my * h, mw * w * ease.out(clamp((lt - 0.6) / 0.6)), mh * h); }
-      c.restore();
+    } else if (style === 'doc') {
+      /* a file card: the photo pinned left (when there is one) and a typed record beside it; without a photo the record is centred */
+      const im = st.im; const gapX = 70 * s; const tw = R.W * (V ? 0.8 : im ? 0.34 : 0.5);
+      let w = 0, h = 0; if (im) { const maxW = R.W * (V ? 0.8 : 0.44), maxH = R.H * (V ? 0.38 : 0.66); w = maxW; h = w * im.height / im.width; if (h > maxH) { h = maxH; w = h * im.width / im.height; } }
+      const total = V ? Math.max(w, tw) : w + (im ? gapX : 0) + tw; const left = (R.W - total) / 2;
+      const ix = V ? R.W / 2 : left + w / 2, iy = V ? R.H * 0.3 : R.H / 2;
+      if (im) { const ki = ease.out(clamp(lt / 0.7)); const z = lerp(1, 1.05, ease.sine(u)); c.save(); c.globalAlpha = ki; c.translate(ix, iy + (1 - ki) * 30 * s); c.rotate(-0.014); c.scale(z, z);
+        c.shadowColor = 'rgba(0,0,0,0.65)'; c.shadowBlur = 50 * s; c.shadowOffsetY = 16 * s; c.fillStyle = '#e9e4d8'; c.fillRect(-w / 2 - 14 * s, -h / 2 - 14 * s, w + 28 * s, h + 28 * s); c.shadowColor = 'transparent'; c.drawImage(im, -w / 2, -h / 2, w, h);
+        if (st.mark) { const [mx, my, mw, mh] = st.mark; c.globalCompositeOperation = 'multiply'; c.fillStyle = th.accent; c.globalAlpha = 0.55 * ease.out(clamp((lt - 0.6) / 0.6)); c.fillRect(-w / 2 + mx * w, -h / 2 + my * h, mw * w * ease.out(clamp((lt - 0.6) / 0.6)), mh * h); }
+        c.restore(); }
+      const tx = V ? R.W / 2 - tw / 2 : im ? left + w + gapX : R.W / 2 - tw / 2; c.textAlign = 'left';
+      c.font = F(800, V ? 78 : 88); const tl = wrapText(c, String(st.title || '').toUpperCase(), tw);
+      c.font = F(500, V ? 44 : 46); const bl = wrapText(c, String(st.text || ''), tw);
+      const bh = 60 * s + tl.length * 92 * s + 40 * s + bl.length * 60 * s; let y = V ? R.H * 0.58 : R.H / 2 - bh / 2;
+      const kp = ease.out(clamp((lt - 0.15) / 0.6)); c.save(); c.globalAlpha = kp; c.shadowColor = 'rgba(0,0,0,0.5)'; c.shadowBlur = 40 * s;
+      pill(c, tx - 44 * s, y - 50 * s, tw + 88 * s, bh + 80 * s, 16 * s, 'rgba(14,18,22,0.82)'); c.restore();
+      c.save(); c.globalAlpha = kp; c.fillStyle = th.accent; c.fillRect(tx - 44 * s, y - 50 * s, 6 * s, bh + 80 * s); c.restore();
+      c.textBaseline = 'middle'; kicker(c, st.kicker || 'Record', tx, y, th.accent, kp); y += 60 * s;
+      c.font = F(800, V ? 78 : 88); c.fillStyle = th.ink; tl.forEach((l, n) => { const k = ease.out(clamp((lt - 0.3 - n * 0.1) / 0.5)); c.globalAlpha = k; c.fillText(l, tx + (1 - k) * 20 * s, y + 40 * s); y += 92 * s; });
+      const rk = ease.out(clamp((lt - 0.5) / 0.6)); c.globalAlpha = 1; c.fillStyle = th.accent; c.fillRect(tx, y + 6 * s, 120 * s * rk, 4 * s); y += 40 * s;
+      c.font = F(500, V ? 44 : 46); c.fillStyle = th.dim; bl.forEach((l, n) => { c.globalAlpha = ease.out(clamp((lt - 0.7 - n * 0.12) / 0.5)); c.fillText(l, tx, y + 30 * s); y += 60 * s; });
     } else if (style === 'title') {
       kicker(c, st.kicker || '', R.W / 2, R.H * 0.36, th.accent, a);
       c.globalAlpha = a; c.font = F(800, V ? 104 : 124); c.fillStyle = th.ink; const ls = wrapText(c, String(st.text || st.title || '').toUpperCase(), R.W * 0.82); ls.forEach((l, i) => c.fillText(l, R.W / 2, R.H * 0.48 + i * 120 * s));

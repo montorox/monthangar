@@ -137,16 +137,20 @@ try {
       const a = i * CH, b = Math.min(n, a + CH), part = names[i] + '.part.mp4';
       const ff = spawn('ffmpeg', ['-y', '-v', 'error', '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'mjpeg', '-i', '-', ...(process.platform === 'darwin' ? encArgs : ['-c:v', 'libx264', '-preset', 'medium', '-crf', '16']), '-pix_fmt', 'yuv420p', '-r', String(FPS), part], { stdio: ['pipe', 'inherit', 'inherit'] });
       const closed = new Promise((ok, no) => ff.on('close', c => c === 0 ? ok() : no(new Error('ffmpeg ' + c))));
-      for (let f = a; f < b; f++) {
+      try { for (let f = a; f < b; f++) {
         const buf = b64(await pg.evaluate(t => MH.frame(t, 0.92), from + f / FPS));
         if (!ff.stdin.write(buf)) await new Promise(ok => ff.stdin.once('drain', ok));
         done++;
         if (done % 150 === 0) { const s = (Date.now() - t0) / 1000; console.log(`MH ${done}/${n - (count - todo.length) * CH} frames, ${(done / s).toFixed(1)} fps, about ${Math.round((n - done) / (done / s) / 60)} min left`); }
-      }
+      } } catch (e) { done -= 0; ff.stdin.destroy(); ff.kill('SIGKILL'); await closed.catch(() => {}); throw e; }
       ff.stdin.end(); await closed; fs.renameSync(part, names[i]);
     }
     const queue = todo.slice();
-    await Promise.all(pages.map(async pg => { while (queue.length) await chunk(pg, queue.shift()); }));
+    /* a page can lose its GPU context on a long render (memory pressure): reopen it and redo that chunk, up to 3 times */
+    await Promise.all(pages.map(async (pg0, w) => { let pg = pg0; while (queue.length) { const i = queue.shift(); for (let tries = 0; ; tries++) {
+      try { await chunk(pg, i); break; }
+      catch (e) { if (tries >= 3) throw e; console.log(`MH worker ${w}: ${String(e.message || e).split('\n')[0]}; reopening the page and redoing chunk ${i}`);
+        try { fs.rmSync(names[i] + '.part.mp4', { force: true }); } catch {} try { await pg.close(); } catch {} pg = await openPage(); } } } }));
     const list = path.join(tmp, 'list.txt'); fs.writeFileSync(list, names.map(f => `file '${f}'`).join('\n'));
     const audio = arg('audio');
     const joinArgs = ['-y', '-v', 'error', '-f', 'concat', '-safe', '0', '-i', list];

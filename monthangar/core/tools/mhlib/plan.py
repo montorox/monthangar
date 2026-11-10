@@ -74,9 +74,9 @@ def resolve(P, cfg, plan, words_data, vertical=False, tail=1.2):
     out.sort(key=lambda x: x['t0'])
     for a, b in zip(out, out[1:]): a['t1'] = b['t0']
     if out: out[-1]['t1'] = round(max(out[-1]['t0'] + 2, end + tail), 3); out[-1].setdefault('out', 'fade')
-    # overlay times can be phrases too
+    # overlay times (and board event times) can be phrases too
     for s in out:
-        for o in s.get('add', []) or []:
+        for o in (s.get('add', []) or []) + list(((s.get('board') or {}).get('events')) or []):
             if isinstance(o.get('t'), str):
                 k = find(words, o['t'], 0)
                 while k is not None and words[k]['s'] < s['t0'] - 0.05: k = find(words, o['t'], k + 1)
@@ -96,7 +96,7 @@ def check(out, cfg, vertical, issues):
         if t in need and not s.get('subject') and len(subs) != 1: issues.append(f'ERROR shot {s["id"]}: {t} needs "subject"')
         sid = s.get('subject') or (list(subs)[0] if subs else None)
         meta = (subs.get(sid) or {}).get('meta', {}) if sid else {}
-        if t == 'flight' and not meta.get('gear') and meta.get('has_wheels', True): issues.append(f'WARN shot {s["id"]}: {sid} has no gear nodes, so wheels will show in flight; run the doctor (it splits the gear)')
+        if t == 'flight' and not meta.get('gear') and not meta.get('add_gear') and meta.get('has_wheels', True): issues.append(f'WARN shot {s["id"]}: {sid} has no gear nodes, so wheels will show in flight; run the doctor (it splits the gear)')
         if t == 'flight' and s.get('gear') == 'down': issues.append(f'NOTE shot {s["id"]}: gear shown down in flight on purpose')
         for o in s.get('add', []) or []:
             if o.get('type') in ('arrow', 'arrow3d'): issues.append(f'ERROR shot {s["id"]}: no 3D arrows; use a label')

@@ -13,7 +13,7 @@ const IMPERIAL = new Set(['ft', 'mi', 'nmi', 'mph', 'kn', 'lb', 'hp', 'lbf', 'US
 export function fmt(v, dec) {
   if (typeof v !== 'number') return String(v);
   const d = dec ?? (Math.abs(v) >= 100 ? 0 : Math.abs(v) >= 10 ? 1 : 2);
-  return v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+  return v.toLocaleString('en-US', { minimumFractionDigits: dec ?? 0, maximumFractionDigits: d });   // 18 ft, not 18.0 ft
 }
 /* returns [first, second] strings in the channel's unit order; never puts metric first for an imperial channel */
 export function units(v, unit, opt = {}) {
@@ -110,7 +110,7 @@ function stat(c, o, k, lt, slot) {
   const s = R.scale, th = R.theme;
   const pos = o.pos || (R.vertical ? 'upper' : 'lower-left');
   const count = typeof o.value === 'number' && o.count !== false ? ease.out(clamp(lt / (o.countDur ?? 1.1))) : 1;
-  const v = typeof o.value === 'number' ? o.value * count : o.value;
+  const v = typeof o.value === 'number' ? (Number.isInteger(o.value) ? Math.round(o.value * count) : o.value * count) : o.value;
   const [a, b] = typeof o.value === 'number' ? units(v, o.unit, o) : [String(o.value), ''];
   const [, bFinal] = typeof o.value === 'number' ? units(o.value, o.unit, o) : ['', ''];
   const big = R.vertical ? 92 : 86;
