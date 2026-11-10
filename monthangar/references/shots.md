@@ -55,7 +55,7 @@ Every shot: `at` (spoken words) or `start` (seconds), `type`, optional `id`, `in
 Maps are 3D by default: the chart is laid on raised land with lit coastlines, filmed by a tilted camera that drifts; cities are light beams with pulsing rings, routes are glowing arcs that lift off the ground. `"style": "flat"` gives the 2D chart instead (quick inserts). 3D only: `tilt` (degrees above the ground, 46), `az` (0 looks north), `drift: false`, route `height`. `mh build` refuses a place that is not in the built-in data: give it as `{name, lon, lat}`.
 
 `"map": { center: [lon, lat], km: width shown, to: {center, km} (a move), cities: ["Name", "Name, Country", {name, lon, lat}], routes: [{from, to, t, dur}], rings: [{at, km}], highlight: ["Country"], labels: [{at: [lon,lat], text}], states: true, title: "..." }`
-Small towns are often missing from the built-in data; give them as `{name, lon, lat}`.
+The built-in data knows about 34,000 towns and cities (every place of 15,000+ people, from GeoNames). Write `"Stratford, Connecticut"` or `"Paris, France"` when a name is shared (`mh build` warns when it is); give smaller places as `{name, lon, lat}`.
 
 ## board
 

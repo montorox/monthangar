@@ -25,11 +25,15 @@ def place_known(name):
     if _PLACES is None:
         import json as _j
         f = Path(__file__).resolve().parents[2] / 'engine' / 'data' / 'geo.json'
-        try: _PLACES = [(c[0] or '').lower() + '|' + (c[3] or '').lower() for c in _j.loads(f.read_text())['cities']]
+        try: _PLACES = [((c[0] or '').lower(), (c[3] or '').lower(), c[4] or 0, c[3] or '') for c in _j.loads(f.read_text())['cities']]
         except Exception: _PLACES = []
     if not _PLACES: return True
+    return bool(place_hits(name))
+
+def place_hits(name):
+    """every place a map name could mean, biggest first (the engine picks the first)"""
     nm, _, cc = (x.strip() for x in name.lower().partition(','))
-    return any(p.split('|')[0] == nm and (not cc or cc in p.split('|')[1]) for p in _PLACES)
+    return sorted([p for p in (_PLACES or []) if p[0] == nm and (not cc or cc in p[1])], key=lambda p: -p[2])
 
 def frames_for(P, shot, fps, size, issues):
     """footage shots: cut the frames the shot needs into build/frames/<hash>/ (shown in previews too)"""
@@ -118,6 +122,9 @@ def check(out, cfg, vertical, issues):
             m = s['map']; names = [c for c in m.get('cities') or []] + [x for r in m.get('routes') or [] for x in [r.get('from'), r.get('to'), *(r.get('via') or [])]] + [r.get('at') for r in m.get('rings') or []]
             for n in names:
                 if isinstance(n, str) and not place_known(n): issues.append(f'ERROR shot {s["id"]}: map place "{n}" is not in the built-in map data; give it as {{"name": "{n}", "lon": ..., "lat": ...}}')
+                elif isinstance(n, str) and ',' not in n:
+                    hits = place_hits(n); lands = {h[3].split(' · ')[0] for h in hits}
+                    if len(lands) > 1: issues.append(f'WARN shot {s["id"]}: "{n}" could be {len(hits)} places; using {hits[0][3]}. Write "{n}, <state or country>" to be sure')
         if t == 'compare' and len(s.get('subjects') or []) < 2: issues.append(f'ERROR shot {s["id"]}: compare needs "subjects": [a, b]')
     run_t, prev, run = None, None, 0
     for s in out:
