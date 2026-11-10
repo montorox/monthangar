@@ -139,7 +139,7 @@ function bayLights(scene, L, theme, S) {
   scene.add(key);
   const rim = new THREE.DirectionalLight(new THREE.Color(theme.rimColor), theme.name === 'graphite' ? 0.9 : 0.5); rim.position.set(-L * 0.4, L * 0.6, -L * 1.5); scene.add(rim);
   /* two ceiling spots make pools of warm light on the floor around the aircraft */
-  for (const [x, z] of [[L * 0.35, L * 0.45], [-L * 0.45, -L * 0.35]]) { const sp = new THREE.SpotLight(new THREE.Color(theme.lampColor), (theme.name === 'graphite' ? 1700 : 600) * (L / 20) ** 2 * theme.lampPower, L * 3, rad(38), 0.85, 1.6); sp.position.set(x, Math.max(12, L * 0.62) - 3, z); sp.target.position.set(x * 0.6, 0, z * 0.6); scene.add(sp); scene.add(sp.target); }
+  for (const [x, z] of [[L * 0.35, L * 0.45], [-L * 0.45, -L * 0.35]]) { const sp = new THREE.SpotLight(new THREE.Color(theme.lampColor), (theme.name === 'graphite' ? 1700 : 600) * (L / 20) ** 1.6 * theme.lampPower, L * 3, rad(38), 0.85, 1.6); sp.position.set(x, Math.max(12, L * 0.62) - 3, z); sp.target.position.set(x * 0.6, 0, z * 0.6); scene.add(sp); scene.add(sp.target); }
   scene.environment = env(theme); scene.environmentIntensity = theme.name === 'graphite' ? 0.38 : 0.7;
 }
 
@@ -152,15 +152,19 @@ export function buildStage(L, theme, opt = {}) {
     vertexShader: 'varying vec2 vU; void main(){ vU=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
     fragmentShader: 'uniform vec3 a,b,top; uniform float k; varying vec2 vU; void main(){ vec2 q=vec2(0.5+(vU.x-0.5)*3.3333, 0.5+(vU.y-0.5)*2.6667); vec2 p=q-vec2(0.5,0.40); p.x*=2.0; float ga=exp(-pow(length(p-vec2(-0.13,0.02))*4.2,2.0)); float gb=exp(-pow(length(p-vec2(0.13,0.02))*4.2,2.0)); vec3 col=top*0.12 + (a*ga + b*gb)*0.42*k; gl_FragColor=vec4(col,1.0); }'
   })); back.position.set(0, L * 1.0, -L * 3.0); g.add(back); g.userData.back = back; g.userData.L = L;
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(L * 12, L * 12), new THREE.MeshStandardMaterial({ color: st.floor, roughness: 0.58, metalness: 0.0, transparent: true, opacity: 0.88 }));
+  /* the floor dissolves into the backdrop: no horizon line, the aircraft floats on a pool of light */
+  const fc = document.createElement('canvas'); fc.width = fc.height = 256; const fx = fc.getContext('2d'); const fg = fx.createRadialGradient(128, 128, 0, 128, 128, 128);
+  fg.addColorStop(0, '#fff'); fg.addColorStop(0.16, '#fff'); fg.addColorStop(0.3, '#6a6a6a'); fg.addColorStop(0.44, '#000'); fg.addColorStop(1, '#000');   /* gone before the backdrop (3 L away) */ fx.fillStyle = fg; fx.fillRect(0, 0, 256, 256);
+  const fade = new THREE.CanvasTexture(fc);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(L * 12, L * 12), new THREE.MeshStandardMaterial({ color: st.floor, roughness: 0.58, metalness: 0.0, transparent: true, opacity: 0.9, alphaMap: fade, depthWrite: false }));
   floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; floor.name = 'floor'; floor.renderOrder = 1; g.add(floor);
-  const under = new THREE.Mesh(new THREE.PlaneGeometry(L * 12, L * 12), new THREE.MeshBasicMaterial({ color: '#000' })); under.rotation.x = -Math.PI / 2; under.position.y = -L; g.add(under);
+  const under = new THREE.Mesh(new THREE.CircleGeometry(L * 2.2, 64), new THREE.MeshBasicMaterial({ color: '#000', transparent: true, opacity: 0.85, alphaMap: fade })); under.rotation.x = -Math.PI / 2; under.position.y = -L * 0.6; g.add(under);
   return g;
 }
 function stageLights(scene, L, theme, opt = {}) {
   const st = theme.stage;
   scene.add(new THREE.HemisphereLight('#9fb3c8', '#050607', 0.25));
-  const key = new THREE.SpotLight('#fff3e2', 1200 * (L / 20) ** 2, L * 6, rad(34), 0.6, 1.4); key.position.set(L * 0.2, L * 1.6, L * 1.9); key.castShadow = true; key.shadow.mapSize.set(2048, 2048); key.shadow.bias = -0.0003; scene.add(key); scene.add(key.target);
+  const key = new THREE.SpotLight('#fff3e2', 1200 * (L / 20) ** 1.4, L * 6, rad(34), 0.6, 1.4);   /* power scales with the falloff, so a big set (compare, a B-52) is lit like a small one */ key.position.set(L * 0.2, L * 1.6, L * 1.9); key.castShadow = true; key.shadow.mapSize.set(2048, 2048); key.shadow.bias = -0.0003; scene.add(key); scene.add(key.target);
   const a = new THREE.DirectionalLight(new THREE.Color(opt.glowA || st.glowA), 2.4); a.position.set(L * 1.4, L * 0.5, -L * 1.2); scene.add(a);
   const b = new THREE.DirectionalLight(new THREE.Color(opt.glowB || st.glowB), 2.4); b.position.set(-L * 1.4, L * 0.5, -L * 1.2); scene.add(b);
   const top = new THREE.DirectionalLight('#ffffff', 0.8); top.position.set(0, L * 2, 0); scene.add(top);
@@ -266,6 +270,7 @@ register('compare', {
     st.camera.aspect = R.W / R.H; st.camera.fov = A.fov; st.camera.position.set(D * Math.cos(rad(el)) * Math.sin(rad(az)), 1 + D * Math.sin(rad(el)), D * Math.cos(rad(el)) * Math.cos(rad(az)));
     st.camera.near = 0.2; st.camera.far = D * 30; st.camera.updateProjectionMatrix(); st.camera.lookAt(0, Math.max(...st.SS.map(S => S.dims.height)) * 0.4, 0);
     st.insts.forEach(i => animate(i, lt, {})); faceStage(st.stage, st.camera);
+    st.bloom = shot.bloom ?? 0.16; st.exposure = shot.exposure ?? 0.9;   /* two aircraft, one of them often bare metal: keep highlights in */
   }
 });
 export { modelScene, drawModel };

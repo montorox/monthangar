@@ -1,6 +1,6 @@
 # MontHangar
 
-Make 3D aircraft documentaries with your AI agent. Real 3D aircraft in a night hangar, on a glowing studio stage and in flight over the ocean, clouds or land, with maps, timeline boards, archival photos and film, spec cards, labels and dimension lines, an original score and sound effects. You bring the topic and your voice. Films run 8 minutes or more.
+Make 3D aircraft documentaries with your AI agent. Real 3D aircraft in a night hangar, on a glowing studio stage and in flight over the ocean, clouds or land, with 3D maps, timeline boards, archival photos and film, spec cards, labels and dimension lines, an original score and sound effects. You bring the topic and your voice. Films run 8 minutes or more.
 
 Every frame is rendered by code on your own computer. No image or video generator, no account and no API key.
 

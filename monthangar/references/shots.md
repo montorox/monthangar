@@ -44,12 +44,15 @@ Every shot: `at` (spoken words) or `start` (seconds), `type`, optional `id`, `in
 | `edges` | outline the aircraft (automatic for very dark paint in the hangar) |
 | `people` | `1`-`3` figures for scale beside the nose |
 | `reflect` | `false` removes the floor reflection |
+| `grade` | `{contrast, sat, lift}` colour grade for this shot (the look and the flight skies set good defaults) |
 | studio only | `glowA`, `glowB` (colours), `glow` (strength 1), `silhouette: true` (white on black, for checks) |
 | flight only | `sky`, `below`, `bank`, `pitch` (degrees), `speed` (m/s of scenery), `puffs` (cloud count), `cover` (cloud deck 0-1), `mode: "flyby"` with `side` (1/-1), `dist`, `height`, `bloom` |
 
 `compare`: `subjects: [a, b]`, `set: "stage"` or bay, `cam` / `to` with `az el dist`. Labels can point at `"1:nose"` (second aircraft).
 
 ## map
+
+Maps are 3D by default: the chart is laid on raised land with lit coastlines, filmed by a tilted camera that drifts; cities are light beams with pulsing rings, routes are glowing arcs that lift off the ground. `"style": "flat"` gives the 2D chart instead (quick inserts). 3D only: `tilt` (degrees above the ground, 46), `az` (0 looks north), `drift: false`, route `height`. `mh build` refuses a place that is not in the built-in data: give it as `{name, lon, lat}`.
 
 `"map": { center: [lon, lat], km: width shown, to: {center, km} (a move), cities: ["Name", "Name, Country", {name, lon, lat}], routes: [{from, to, t, dur}], rings: [{at, km}], highlight: ["Country"], labels: [{at: [lon,lat], text}], states: true, title: "..." }`
 Small towns are often missing from the built-in data; give them as `{name, lon, lat}`.

@@ -19,6 +19,18 @@ def subjects_for(cfg, ids, issues):
         out[i] = {'url': f'/lib/{pk}/{i}/model.glb', 'meta': meta}
     return out
 
+_PLACES = None
+def place_known(name):
+    global _PLACES
+    if _PLACES is None:
+        import json as _j
+        f = Path(__file__).resolve().parents[2] / 'engine' / 'data' / 'geo.json'
+        try: _PLACES = [(c[0] or '').lower() + '|' + (c[3] or '').lower() for c in _j.loads(f.read_text())['cities']]
+        except Exception: _PLACES = []
+    if not _PLACES: return True
+    nm, _, cc = (x.strip() for x in name.lower().partition(','))
+    return any(p.split('|')[0] == nm and (not cc or cc in p.split('|')[1]) for p in _PLACES)
+
 def frames_for(P, shot, fps, size, issues):
     """footage shots: cut the frames the shot needs into build/frames/<hash>/ (shown in previews too)"""
     src = Path(shot['media']); src = src if src.is_absolute() else P / src
@@ -102,6 +114,10 @@ def check(out, cfg, vertical, issues):
             elif sub and sub not in s[k]: issues.append(f'ERROR shot {s["id"]}: "{k}" needs "{sub}"')
             elif t == 'card' and s[k].get('style') not in STYLES: issues.append(f'ERROR shot {s["id"]}: card style "{s[k].get("style")}" is not one of {sorted(STYLES)}')
         if t == 'archival' and not s.get('media'): issues.append(f'ERROR shot {s["id"]}: archival needs "media"')
+        if t == 'map' and isinstance(s.get('map'), dict):   # every named place must exist in the map data, or the engine drops it (and its routes)
+            m = s['map']; names = [c for c in m.get('cities') or []] + [x for r in m.get('routes') or [] for x in [r.get('from'), r.get('to'), *(r.get('via') or [])]] + [r.get('at') for r in m.get('rings') or []]
+            for n in names:
+                if isinstance(n, str) and not place_known(n): issues.append(f'ERROR shot {s["id"]}: map place "{n}" is not in the built-in map data; give it as {{"name": "{n}", "lon": ..., "lat": ...}}')
         if t == 'compare' and len(s.get('subjects') or []) < 2: issues.append(f'ERROR shot {s["id"]}: compare needs "subjects": [a, b]')
     run_t, prev, run = None, None, 0
     for s in out:

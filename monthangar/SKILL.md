@@ -1,6 +1,6 @@
 ---
 name: monthangar
-description: Make a 3D aircraft explainer documentary (16:9, 8 minutes or more, plus a 9:16 Short) from a topic or script and the user's own voice-over. Real licensed 3D aircraft in a night hangar, on a glowing studio stage and in flight over ocean, clouds or land, with maps, timeline boards, archival photos and film, spec and fact cards, labels and dimension lines, an original synthesized score and SFX mixed to -14 LUFS. Every frame is code rendered on the GPU; no image or video generator, no account or API key. Use when the user says MontHangar, or asks for an aviation or aircraft explainer, a "why did this plane have X" video, a 3D aircraft walkaround documentary, or a Short in that style.
+description: Make a 3D aircraft explainer documentary (16:9, 8 minutes or more, plus a 9:16 Short) from a topic or script and the user's own voice-over. Real licensed 3D aircraft in a night hangar, on a glowing studio stage and in flight over ocean, clouds or land, with 3D maps, timeline boards, archival photos and film, spec and fact cards, labels and dimension lines, an original synthesized score and SFX mixed to -14 LUFS. Every frame is code rendered on the GPU; no image or video generator, no account or API key. Use when the user says MontHangar, or asks for an aviation or aircraft explainer, a "why did this plane have X" video, a 3D aircraft walkaround documentary, or a Short in that style.
 ---
 
 # MontHangar
@@ -73,7 +73,7 @@ Grade C models suit distant flight and backgrounds only; plan close-ups around g
 | `studio` | the aircraft on the black stage with the two-colour glow; portraits, head-on reveals, x-ray |
 | `flight` | in the air; `sky` day/golden/dusk/high/overcast, `below` ocean/clouds/land/desert/snow; `mode: "flyby"` |
 | `compare` | two or more library aircraft side by side (`subjects`), on the stage or in the bay |
-| `map` | real coastlines, borders, lakes, rivers and cities; routes with a moving plane icon, rings, highlighted countries |
+| `map` | 3D by default: raised land with lit coasts under a tilted, drifting camera; cities as light beams, routes as glowing arcs with a moving plane, rings, highlighted countries. `"style": "flat"` for a 2D chart |
 | `board` | a dated timeline with pinned photos |
 | `archival` | a photo or film clip fitted whole in a framed window over a soft copy of itself, with caption and credit |
 | `card` | `chapter`, `fact`, `spec`, `list`, `quote`, `doc`, `title` |

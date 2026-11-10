@@ -66,7 +66,10 @@ export async function boot(tl, opt) {
   /* one bad pixel (NaN or a huge value) would smear across the whole frame through the bloom blur; clean it first */
   R.sanitize = new ShaderPass({ uniforms: { tDiffuse: { value: null }, uMax: { value: 48 } }, vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
     fragmentShader: 'uniform sampler2D tDiffuse; uniform float uMax; varying vec2 vUv; void main(){ vec4 c=texture2D(tDiffuse,vUv); if(any(isnan(c)) || any(isinf(c))) c=vec4(0.0,0.0,0.0,1.0); gl_FragColor=vec4(min(c.rgb,vec3(uMax)),c.a); }' });
-  R.composer.addPass(R.renderPass); R.composer.addPass(R.sanitize); R.composer.addPass(R.outline); R.composer.addPass(R.bloom); R.composer.addPass(new OutputPass());
+  /* the grade: a colourist's last touch in display space (contrast round mid-grey, saturation, a little lift); per shot */
+  R.grade = new ShaderPass({ uniforms: { tDiffuse: { value: null }, uC: { value: 1 }, uS: { value: 1 }, uL: { value: 0 } }, vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+    fragmentShader: 'uniform sampler2D tDiffuse; uniform float uC,uS,uL; varying vec2 vUv; void main(){ vec4 c=texture2D(tDiffuse,vUv); vec3 x=c.rgb; float l=dot(x,vec3(0.2126,0.7152,0.0722)); x=mix(vec3(l),x,uS); x=(x-0.5)*uC+0.5; x=x+uL*(1.0-x); gl_FragColor=vec4(clamp(x,0.0,1.0),c.a); }' });
+  R.composer.addPass(R.renderPass); R.composer.addPass(R.sanitize); R.composer.addPass(R.outline); R.composer.addPass(R.bloom); R.composer.addPass(new OutputPass()); R.composer.addPass(R.grade);
   R.gl = gl;
   R.out = document.createElement('canvas'); R.out.width = R.W; R.out.height = R.H; document.body.appendChild(R.out);
   R.ctx = R.out.getContext('2d');
@@ -130,7 +133,7 @@ async function drawShot(i, t, c) {
   if (impl.prepare) await impl.prepare(st, t - s.t0);
   const lt = t - s.t0, dur = Math.max(0.001, s.t1 - s.t0), u = clamp(lt / dur);
   const cx = ctxFor(s);
-  if (impl.kind === '3d') {
+  if ((st && st.kind) === '3d' || (impl.kind === '3d' && !(st && st.kind === '2d'))) {   /* a shot type can pick 2D or 3D per shot (the map) */
     impl.draw(st, lt, u, cx);
     R.renderPass.scene = st.scene; R.renderPass.camera = st.camera;
     R.outline.renderScene = st.scene; R.outline.renderCamera = st.camera;
@@ -139,8 +142,10 @@ async function drawShot(i, t, c) {
     if (sel.length) { const col = new THREE.Color(st.outlineColor || R.theme.glow); R.outline.visibleEdgeColor.copy(col); R.outline.hiddenEdgeColor.copy(col).multiplyScalar(0.35); R.outline.edgeStrength = st.outlineStrength || 4; }
     R.bloom.strength = st.bloom ?? R.theme.bloom; R.bloom.enabled = R.bloom.strength > 0; R.bloom.threshold = st.bloomThreshold ?? 1.0; R.sanitize.uniforms.uMax.value = st.clampMax ?? 48;
     R.renderer.toneMappingExposure = st.exposure ?? 1;
+    const gr = st.grade || R.theme.grade || {}; R.grade.uniforms.uC.value = gr.contrast ?? 1; R.grade.uniforms.uS.value = gr.sat ?? 1; R.grade.uniforms.uL.value = gr.lift ?? 0; R.grade.enabled = (gr.contrast ?? 1) !== 1 || (gr.sat ?? 1) !== 1 || (gr.lift ?? 0) !== 0;
     R.composer.render();
     c.drawImage(R.gl, 0, 0);
+    if (impl.post) impl.post(st, lt, u, { ...cx, c });   /* crisp 2D labels over the 3D frame */
   } else {
     impl.draw(st, lt, u, { ...cx, c });
   }
