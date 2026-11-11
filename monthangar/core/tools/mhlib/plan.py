@@ -76,7 +76,8 @@ def resolve(P, cfg, plan, words_data, vertical=False, tail=1.2):
     if out: out[-1]['t1'] = round(max(out[-1]['t0'] + 2, end + tail), 3); out[-1].setdefault('out', 'fade')
     # overlay times (and board event times) can be phrases too
     for s in out:
-        for o in (s.get('add', []) or []) + list(((s.get('board') or {}).get('events')) or []):
+        m = s.get('map') if isinstance(s.get('map'), dict) else {}
+        for o in (s.get('add', []) or []) + list(((s.get('board') or {}).get('events')) or []) + list(m.get('routes') or []) + list(m.get('rings') or []):
             if isinstance(o.get('t'), str):
                 k = find(words, o['t'], 0)
                 while k is not None and words[k]['s'] < s['t0'] - 0.05: k = find(words, o['t'], k + 1)
@@ -140,6 +141,13 @@ def check(out, cfg, vertical, issues):
             got = share.get(t, 0)
             if want >= 0.1 and got < want * 0.35: issues.append(f'NOTE {t} shots fill {got:.0%} of the film (house rhythm about {want:.0%})')
             if got > want * 2.2 and got > 0.2: issues.append(f'NOTE {t} shots fill {got:.0%} of the film (house rhythm about {want:.0%}); the film may feel samey')
+    # a documentary shows things; text on a dark card is a slide. Cards stay a seasoning, not the meal.
+    card_max = 0.25 if vertical else 0.12
+    if share.get('card', 0) > card_max: issues.append(f'WARN card shots fill {share["card"]:.0%} of the film (keep under {card_max:.0%}); this reads as a slideshow. Turn title, fact and list cards into 3D shots with a title, stat or note overlay, and keep cards for chapters and real documents')
+    run = 0
+    for s in out:
+        run = run + 1 if s.get('type') in ('card', 'board') else 0
+        if run == 2 and not vertical: issues.append(f'WARN two text shots (card/board) in a row at {stamp(s["t0"])}; put the aircraft, a map or a photo between them')
     avg = total / max(1, len(out))
     return share, avg
 

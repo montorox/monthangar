@@ -89,6 +89,7 @@ Overlays (`"add": [...]`, `t` = seconds into the shot or a spoken phrase): `labe
 
 ## House rhythm (the checks warn on timing, runs and repeated cameras; the rest is your judgement)
 
+- It is a documentary, not a slideshow: show what is said with the aircraft, a map or a photo, and put words on top of it (title, stat, note). Cards are for chapter openers and real documents, under about 12% of a film (25% in a Short), never two text shots (card or board) back to back. `mh build` warns on both.
 - A new picture every 4-6 s on average; 3D shots up to 9 s, cards up to 9 s. No five shots of one type in a row; never the same camera twice running.
 - About a quarter hangar, a sixth studio, a sixth flight, a fifth archival, the rest maps, boards and cards. A chapter card on each `##`.
 - Show what is said: a number gets a card or stat, a place gets a map, a part gets a label or a close-up on it, a person gets their photo.

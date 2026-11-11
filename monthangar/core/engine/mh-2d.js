@@ -120,7 +120,7 @@ export const MAP_FLAT = {
       if (ring.label) { c.font = F(700, 28); c.fillStyle = R.theme.accent2; c.textAlign = 'center'; c.fillText(ring.label.toUpperCase(), pts[0][0], pts[0][1] - 14 * s); } c.restore(); }
     /* routes */
     for (const r of st.routes) {
-      if (!r.pts.length) continue; const t0 = r.t ?? 0.3, d = r.dur ?? Math.max(1.2, (cx.shot.t1 - cx.shot.t0) * 0.6);
+      if (!r.pts.length) continue; const t0 = typeof r.t === 'number' ? r.t : 0.3, d = r.dur ?? Math.max(1.2, (cx.shot.t1 - cx.shot.t0) * 0.6);
       const g = ease.inOut(clamp((lt - t0) / d)); if (g <= 0) continue;
       const pts = r.pts.map(p => P(p.lon, p.lat)); const n = Math.max(1, Math.floor(g * (pts.length - 1)));
       c.save(); c.lineCap = 'round'; c.strokeStyle = r.color || th.route; c.globalAlpha = 0.35; c.lineWidth = 9 * s; c.beginPath(); for (let i = 0; i <= n; i++) i ? c.lineTo(...pts[i]) : c.moveTo(...pts[i]); c.stroke();

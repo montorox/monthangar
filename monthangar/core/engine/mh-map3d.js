@@ -108,7 +108,7 @@ function draw3d(st, lt, u, cx) {
   }
   const dur = cx.shot.t1 - cx.shot.t0;
   for (const r of st.routes) {
-    const t0 = r.t ?? 0.3, rd = r.dur ?? Math.max(1.2, dur * 0.6); r.g = ease.inOut(clamp((lt - t0) / rd));
+    const t0 = typeof r.t === 'number' ? r.t : 0.3, rd = r.dur ?? Math.max(1.2, dur * 0.6); r.g = ease.inOut(clamp((lt - t0) / rd));
     const n = Math.floor(r.g * r.N); r.tube.geometry.setDrawRange(0, n * r.RS * 6); r.sh.geometry.setDrawRange(0, n * 6 * 6); r.tube.visible = r.sh.visible = n > 0;
     r.tube.scale.set(1, 1, 1);
   }

@@ -15,11 +15,12 @@ float h21(vec2 p){ p = fract(p*vec2(123.34,456.21)); p += dot(p,p+45.32); return
 float vn(vec2 p){ vec2 i=floor(p), f=fract(p); vec2 u=f*f*(3.0-2.0*f); return mix(mix(h21(i),h21(i+vec2(1,0)),u.x), mix(h21(i+vec2(0,1)),h21(i+vec2(1,1)),u.x), u.y); }
 float fbm(vec2 p){ float a=0.5, s=0.0; for(int i=0;i<6;i++){ s+=a*vn(p); p=p*2.03+vec2(17.1,9.2); a*=0.5; } return s; }`;
 
-/* sky presets: sun elevation and azimuth in degrees, turbidity, haze colour */
+/* sky presets: sun elevation and azimuth in degrees, turbidity, haze colour.
+   deck (warm skies): a fuller cloud deck with cool gaps and sun-tinted tops, so low-sun clouds never read as sand dunes */
 const SKIES = {
   day: { el: 38, az: 140, turb: 1.6, ray: 2.1, mie: 0.0018, mieG: 0.7, zenith: '#174c93', horizon: '#aecbe6', haze: '#9ab8d6', sun: '#fff1de', sunI: 4.2, hemi: 0.9, env: 1.6, expo: 0.62, puffA: 0.6, grade: { contrast: 1.12, sat: 1.14 } },
-  golden: { el: 9, az: 230, turb: 5, ray: 2.2, haze: '#e8b98a', sun: '#ffc98a', sunI: 3.2, hemi: 0.6, expo: 0.62, puffA: 0.45, puffL: 0.72 },
-  dusk: { el: 2.2, az: 250, turb: 7, ray: 3.0, haze: '#c27a5c', sun: '#ff9a62', sunI: 2.4, hemi: 0.45, expo: 0.8, puffA: 0.4, puffL: 0.6 },
+  golden: { el: 9, az: 230, turb: 5, ray: 2.2, haze: '#e8b98a', sun: '#ffc98a', sunI: 3.2, hemi: 0.6, expo: 0.62, puffA: 0.45, puffL: 0.72, deck: { cover: 0.3, gap: '#6c7891', shadow: '#7d8aa3', warm: 0.28 } },
+  dusk: { el: 2.2, az: 250, turb: 7, ray: 3.0, haze: '#c27a5c', sun: '#ff9a62', sunI: 2.4, hemi: 0.45, expo: 0.8, puffA: 0.4, puffL: 0.6, deck: { cover: 0.3, gap: '#4f5670', shadow: '#5f6680', warm: 0.32 } },
   high: { el: 55, az: 120, turb: 1.2, ray: 0.8, zenith: '#163f86', horizon: '#a9c6e6', haze: '#8fb2d6', sun: '#ffffff', sunI: 3.2, hemi: 0.9, env: 1.6, expo: 0.6, puffA: 0.6, grade: { contrast: 1.1, sat: 1.1 } },
   overcast: { el: 35, az: 160, turb: 12, ray: 0.5, haze: '#a9b2b9', sun: '#e9eef2', sunI: 1.2, hemi: 1.5, expo: 0.6 }
 };
@@ -52,18 +53,18 @@ function oceanMat(sunDir, haze, deep) {
       }`
   });
 }
-function cloudDeckMat(sunDir, haze, shadow) {
+function cloudDeckMat(sunDir, haze, shadow, lit = '#fffaf2') {
   return new THREE.ShaderMaterial({
     transparent: true, depthWrite: false,
-    uniforms: { uT: { value: 0 }, uOff: { value: 0 }, uSun: { value: sunDir }, uHaze: { value: new THREE.Color(haze) }, uShadow: { value: new THREE.Color(shadow) }, uFar: { value: 9000 }, uCover: { value: 0.5 } },
+    uniforms: { uT: { value: 0 }, uOff: { value: 0 }, uSun: { value: sunDir }, uHaze: { value: new THREE.Color(haze) }, uShadow: { value: new THREE.Color(shadow) }, uFar: { value: 9000 }, uCover: { value: 0.5 }, uLit: { value: new THREE.Color(lit) } },
     vertexShader: 'varying vec3 vW; void main(){ vec4 w=modelMatrix*vec4(position,1.0); vW=w.xyz; gl_Position=projectionMatrix*viewMatrix*w; }',
     fragmentShader: NOISE + `
-      uniform float uT, uOff, uFar, uCover; uniform vec3 uSun, uHaze, uShadow; varying vec3 vW;
+      uniform float uT, uOff, uFar, uCover; uniform vec3 uSun, uHaze, uShadow, uLit; varying vec3 vW;
       void main(){ vec2 p=(vW.xz+vec2(0.0,uOff))*0.0016 + vec2(uT*0.004,0.0);
         float d = fbm(p) + 0.35*fbm(p*4.0);
         float a = smoothstep(uCover, uCover+0.28, d);
         float lit = clamp(0.55 + (fbm(p*2.0+vec2(0.3*uSun.x,0.3*uSun.z)) - fbm(p*2.0))*3.0 + d*0.4, 0.0, 1.0);
-        vec3 col = mix(uShadow, vec3(1.0,0.98,0.95)*1.15, lit);
+        vec3 col = mix(uShadow, uLit*1.15, lit);
         float dist = length(vW.xz - cameraPosition.xz); col = mix(col, uHaze, smoothstep(uFar*0.2, uFar, dist));
         gl_FragColor = vec4(col, a*(1.0-smoothstep(uFar*0.6,uFar,dist))); 
         #include <tonemapping_fragment>
@@ -125,7 +126,7 @@ async function setupFlight(shot) {
   const plane = new THREE.PlaneGeometry(60000, 60000, 1, 1); plane.rotateX(-Math.PI / 2);
   let surf;
   if (below === 'ocean') surf = new THREE.Mesh(plane, oceanMat(sun, pre.haze, '#0b2a3a'));
-  else if (below === 'clouds') { surf = new THREE.Mesh(plane, oceanMat(sun, pre.haze, '#0d2c3c')); surf.position.y = -1400; const deck = new THREE.Mesh(plane, cloudDeckMat(sun, pre.haze, '#8d9fb3')); deck.material.uniforms.uCover.value = shot.cover ?? 0.42; scene.add(deck); scene.userData.deck = deck; }
+  else if (below === 'clouds') { const dk = pre.deck || {}; surf = new THREE.Mesh(plane, oceanMat(sun, dk.gap || pre.haze, '#0d2c3c')); surf.position.y = -1400; const deck = new THREE.Mesh(plane, cloudDeckMat(sun, pre.haze, dk.shadow || '#8d9fb3', '#' + new THREE.Color('#fffaf2').lerp(new THREE.Color(pre.sun), dk.warm || 0).getHexString())); deck.material.uniforms.uCover.value = shot.cover ?? dk.cover ?? 0.42; scene.add(deck); scene.userData.deck = deck; }
   else surf = new THREE.Mesh(plane, groundMat(below, sun, pre.haze));
   surf.position.y += -alt; scene.add(surf);
   if (scene.userData.deck) scene.userData.deck.position.y = -alt;
